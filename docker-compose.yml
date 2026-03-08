@@ -1,0 +1,41 @@
+version: "3.9"
+
+services:
+
+  # ── Ollama LLM Engine ───────────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ali-ollama
+    volumes:
+      - ollama_data:/root/.ollama           # persists downloaded models
+      - ./backend/Ollama:/modelfiles:ro     # Modelfile + creation scripts
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+    # CPU-only: no deploy.resources.reservations needed
+    # To pull and create the custom model on first start:
+    entrypoint: >
+      sh -c "ollama serve &
+             sleep 5 &&
+             ollama pull qwen3.5:2b &&
+             ollama create ali-realestate -f /modelfiles/Modelfile &&
+             wait"
+
+  # ── FastAPI Backend ─────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ali-api
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434     # point client at the ollama container
+    depends_on:
+      - ollama
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/app/frontend:ro         # serve static frontend files
+
+volumes:
+  ollama_data:
