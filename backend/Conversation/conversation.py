@@ -217,6 +217,19 @@ def delete_session(session_id: str) -> None:
     """Remove a session from the store immediately."""
     _sessions.pop(session_id, None)
 
+def get_session_info(session_id: str) -> Optional[dict]:
+    """Return a JSON-safe summary of session state (no full history)."""
+    session = get_session(session_id)
+    if session is None:
+        return None
+    return {
+        "session_id":        session.session_id,
+        "stage":             session.stage,
+        "selected_category": session.selected_category,
+        "selected_subtype":  session.selected_subtype,
+        "selected_price":    session.selected_price,
+        "turn_count":        len(session.history) // 2,
+    }
 
 def _purge_expired_sessions() -> None:
     """Delete all sessions inactive longer than SESSION_TTL_SECONDS."""
