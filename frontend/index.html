@@ -588,10 +588,11 @@
   const WS_BASE  = API_BASE.replace(/^http/, 'ws');
 
   // ── State ──────────────────────────────────────────────────────────────────
-  let ws          = null;
-  let sessionId   = null;
-  let isStreaming = false;
-  let currentBubble = null;
+  let ws             = null;
+  let sessionId      = null;
+  let isStreaming    = false;
+  let currentBubble = null;   // direct DOM reference — never use getElementById for this
+  let currentMeta   = null;   // direct DOM reference for the timestamp element
   let reconnectTimer = null;
 
   // ── Init ───────────────────────────────────────────────────────────────────
@@ -693,16 +694,35 @@
     setStatus('typing', 'Ali is typing…');
     document.getElementById('sendBtn').disabled = true;
 
+    // Build the new message row
     const row = document.createElement('div');
     row.className = 'message ali';
-    row.innerHTML = `
-      <div class="avatar ali-av">🏠</div>
-      <div>
-        <div class="bubble streaming" id="streamBubble"></div>
-        <div class="message-meta" id="streamMeta"></div>
-      </div>`;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar ali-av';
+    avatar.textContent = '🏠';
+
+    const wrapper = document.createElement('div');
+
+    // ── FIX: store direct references, never use a static id ──
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble streaming';
+
+    const meta = document.createElement('div');
+    meta.className = 'message-meta';
+
+    wrapper.appendChild(bubble);
+    wrapper.appendChild(meta);
+    row.appendChild(avatar);
+    row.appendChild(wrapper);
+
     document.getElementById('messages').appendChild(row);
-    currentBubble = document.getElementById('streamBubble');
+
+    // Keep module-level references so appendToken / finishStreaming
+    // always write to THIS turn's elements, not a stale earlier one.
+    currentBubble = bubble;
+    currentMeta   = meta;
+
     scrollBottom();
   }
 
@@ -716,9 +736,10 @@
     isStreaming = false;
     if (currentBubble) {
       currentBubble.classList.remove('streaming');
-      const meta = document.getElementById('streamMeta');
-      if (meta) meta.textContent = formatTime();
+      if (currentMeta) currentMeta.textContent = formatTime();
+      // Clear references so a stale token from a race can't corrupt a future bubble
       currentBubble = null;
+      currentMeta   = null;
     }
     setStatus('online', 'Connected');
     document.getElementById('sendBtn').disabled = false;
@@ -730,12 +751,27 @@
     const isUser = role === 'user';
     const row = document.createElement('div');
     row.className = `message ${isUser ? 'user' : 'ali'}`;
-    row.innerHTML = `
-      <div class="avatar ${isUser ? 'user-av' : 'ali-av'}">${isUser ? '👤' : '🏠'}</div>
-      <div>
-        <div class="bubble">${escHtml(text)}</div>
-        <div class="message-meta">${formatTime()}</div>
-      </div>`;
+
+    const avatar = document.createElement('div');
+    avatar.className = `avatar ${isUser ? 'user-av' : 'ali-av'}`;
+    avatar.textContent = isUser ? '👤' : '🏠';
+
+    const wrapper = document.createElement('div');
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.textContent = text;
+
+    const meta = document.createElement('div');
+    meta.className = 'message-meta';
+    meta.textContent = formatTime();
+    if (isUser) meta.style.textAlign = 'right';
+
+    wrapper.appendChild(bubble);
+    wrapper.appendChild(meta);
+    row.appendChild(avatar);
+    row.appendChild(wrapper);
+
     document.getElementById('messages').appendChild(row);
     scrollBottom();
   }
@@ -784,10 +820,6 @@
     return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
-  function escHtml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
   // ── New session ────────────────────────────────────────────────────────────
   async function newSession() {
     if (isStreaming) return;
@@ -803,6 +835,8 @@
           <button class="quick-btn" onclick="sendQuick('I need a shop')">Shops</button>
         </div>
       </div>`;
+    currentBubble = null;
+    currentMeta   = null;
     await createSession();
   }
 

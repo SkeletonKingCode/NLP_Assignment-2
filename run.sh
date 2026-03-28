@@ -3,6 +3,8 @@
 # Usage:  chmod +x run.sh && ./run.sh
 #         ./run.sh --stop   ← kill everything
 
+# conda activate urdu scraper
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
